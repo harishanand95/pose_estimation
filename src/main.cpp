@@ -29,8 +29,12 @@ void project3Dto2D(const Matrix<double, 4, 6> points3D, const Matrix3d intrinsic
     points2D = points2D.array().rowwise() / points2D.row(last_row).array();
 }
 
-void createPose(const Matrix <double , 6, 1>& pose, Matrix<double, 3, 4>& transformMatrix){
 
+void createPose(const Matrix <double , 6, 1>& pose, Matrix<double, 3, 4>& transformMatrix){
+    /*
+     * createPose function create [R T] matrix from inputs roll, pitch, yaw, x, y, z
+     *
+     */
     Eigen::AngleAxisd rollAngle(pose(0, 0), Eigen::Vector3d::UnitX());
     Eigen::AngleAxisd pitchAngle(pose(1, 0), Eigen::Vector3d::UnitY());
     Eigen::AngleAxisd yawAngle(pose(2, 0), Eigen::Vector3d::UnitZ());
@@ -47,7 +51,11 @@ void createPose(const Matrix <double , 6, 1>& pose, Matrix<double, 3, 4>& transf
 
 }
 
+
 void plotPoints(Mat image, Matrix<double , 3, 6>& points2D){
+    /*
+     * Plots 2D points to image
+     */
     vector<cv::Point> points;
     for (int i = 0; i < 6; i++ ) {
         int x = (int) points2D(0, i);
@@ -56,6 +64,7 @@ void plotPoints(Mat image, Matrix<double , 3, 6>& points2D){
         cv::circle(image, cv::Point(x, y), 4, cv::Scalar(255,0,255), -1);
     }
 }
+
 
 int main(){
 	
@@ -115,35 +124,53 @@ int main(){
     plotPoints(displayImage, estimated2DPoints);
 
     // Show the points
-//  imshow("Display window", image);
-//  waitKey(0);
+    imshow("Display window", image);
+    waitKey(0);
 
-    for( int i = 0; i < 2; i++){
+    for( int i = 0; i < 6; i++){
 
         project3Dto2D(actual3DPoints, K, RT, estimated2DPoints);
         Mat displayImage = image.clone();
         plotPoints(displayImage, estimated2DPoints);
-        // Show the points
-        imshow("Display window", displayImage);
-        waitKey(0);
 
-        double e = 0.00001;
-        // rows represent the 6 functions for the 6 3D points
-        // cols represent parameters roll pitch yaw x y z that are updated
-        // to better estimate pose
+
+        // Show the points
+        string filename = to_string(i) + ".jpg";
+        imwrite(filename, displayImage);
+
+        double e = 0.0001;
+
+        /*
+         * Jacobian numerical calculation
+         * rows represent the 12 functions for the 6 3D points
+         * cols represent parameters roll pitch yaw x y z that are updated
+         * to better estimate pose
+         */
+
         Matrix<double, 12, 6> jacobian = Matrix<double, 12, 6>::Zero();
         Matrix<double, 3, 6> jacobian2DPoints = Matrix<double, 3, 6>::Zero();
         VectorXd vec(12);
 
-        // Iteratively find jacobian of the function
+        // Iteratively find jacobian of the function project3Dto2D at guessed pose
         for (int j = 0; j < 6; j++){
-            pose(j) = pose(j) + e;
-            createPose(pose, RT);
+            Matrix<double, 6, 1> updatedPose = pose;
+            updatedPose(j) = updatedPose(j) + e;
+            createPose(updatedPose, RT);
             project3Dto2D(actual3DPoints, K, RT, jacobian2DPoints);
             vec << ((jacobian2DPoints - estimated2DPoints) / e).row(0).transpose(),
                     ((jacobian2DPoints - estimated2DPoints) / e).row(1).transpose();
             jacobian.col(j) = vec;
         }
+
+        /*
+         * Create deltaY
+         * the taylor expansion is as follows for f(x)
+         * f(x_1) = f(x_0) + f'(x_0) * deltaX where x_0 is the x parameter values at each iteration
+         *                                    and f(x_1) is the known function value, but x_1 is unknown
+         * ...
+         * f(x_1) = f(x_0) + f'(x_0) * deltaX,
+         * deltaY = J * deltaX
+         */
 
         Matrix<double, 12, 1> deltaY;
         deltaY << (actual2DPoints - estimated2DPoints.block<2, 6>(0,0).transpose()).col(0),
@@ -161,9 +188,6 @@ int main(){
         deltaX << (jacobian.transpose() * jacobian).ldlt().solve(jacobian.transpose() * deltaY);
         pose = pose + deltaX;
         createPose(pose, RT);
-
     }
-
-
     return 1;
 }
