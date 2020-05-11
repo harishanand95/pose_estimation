@@ -9,7 +9,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <iostream>
 #include <Eigen/Dense>
-
+#include <Eigen/QR>
 
 using namespace cv;
 using namespace std;
@@ -45,6 +45,16 @@ void createPose(const Matrix <double , 6, 1>& pose, Matrix<double, 3, 4>& transf
     trans(2, 3) = pose(5, 0);
     transformMatrix = trans.block<3, 4>(0,0);
 
+}
+
+void plotPoints(Mat image, Matrix<double , 3, 6>& points2D){
+    vector<cv::Point> points;
+    for (int i = 0; i < 6; i++ ) {
+        int x = (int) points2D(0, i);
+        int y = (int) points2D(1, i);
+        points.emplace_back(cv::Point(x, y));
+        cv::circle(image, cv::Point(x, y), 4, cv::Scalar(255,0,255), -1);
+    }
 }
 
 int main(){
@@ -100,20 +110,60 @@ int main(){
     Matrix<double, 3, 6> estimated2DPoints = Matrix<double, 3, 6>::Zero();
     project3Dto2D(actual3DPoints, K, RT, estimated2DPoints);
 
-
     // Plot the points
-    vector<cv::Point> points;
-    for (int i = 0; i < 6; i++ ) {
-        int x = (int) estimated2DPoints(0, i);
-        int y = (int) estimated2DPoints(1, i);
-        points.emplace_back(cv::Point(x, y));
-        cv::circle(image, cv::Point(x, y), 4, cv::Scalar(255,0,255), -1);
-    }
+    Mat displayImage = image.clone();
+    plotPoints(displayImage, estimated2DPoints);
 
     // Show the points
-    imshow("Display window", image);
-    waitKey(0);
-    
+//  imshow("Display window", image);
+//  waitKey(0);
+
+    for( int i = 0; i < 2; i++){
+
+        project3Dto2D(actual3DPoints, K, RT, estimated2DPoints);
+        Mat displayImage = image.clone();
+        plotPoints(displayImage, estimated2DPoints);
+        // Show the points
+        imshow("Display window", displayImage);
+        waitKey(0);
+
+        double e = 0.00001;
+        // rows represent the 6 functions for the 6 3D points
+        // cols represent parameters roll pitch yaw x y z that are updated
+        // to better estimate pose
+        Matrix<double, 12, 6> jacobian = Matrix<double, 12, 6>::Zero();
+        Matrix<double, 3, 6> jacobian2DPoints = Matrix<double, 3, 6>::Zero();
+        VectorXd vec(12);
+
+        // Iteratively find jacobian of the function
+        for (int j = 0; j < 6; j++){
+            pose(j) = pose(j) + e;
+            createPose(pose, RT);
+            project3Dto2D(actual3DPoints, K, RT, jacobian2DPoints);
+            vec << ((jacobian2DPoints - estimated2DPoints) / e).row(0).transpose(),
+                    ((jacobian2DPoints - estimated2DPoints) / e).row(1).transpose();
+            jacobian.col(j) = vec;
+        }
+
+        Matrix<double, 12, 1> deltaY;
+        deltaY << (actual2DPoints - estimated2DPoints.block<2, 6>(0,0).transpose()).col(0),
+                  (actual2DPoints - estimated2DPoints.block<2, 6>(0,0).transpose()).col(1);
+
+        // Delta X is the change in the pose we need
+        Matrix<double, 6, 1> deltaX = Matrix<double, 6, 1>::Zero();
+
+        // Now we need to take pseudo inverse of matrix J
+        // We try to solve the below equation to estimate delta x
+        // Solve dy = J dx for dx
+        // Code for solving the linearized system (taylor expansion)
+        // https://eigen.tuxfamily.org/dox/group__LeastSquares.html
+
+        deltaX << (jacobian.transpose() * jacobian).ldlt().solve(jacobian.transpose() * deltaY);
+        pose = pose + deltaX;
+        createPose(pose, RT);
+
+    }
+
+
     return 1;
 }
-
