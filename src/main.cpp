@@ -67,9 +67,9 @@ void plotPoints(Mat image, Matrix<double , 3, 6>& points2D){
 
 
 int main(){
-	
-	Mat image;	
-	image = imread("../images/image.tif", CV_LOAD_IMAGE_COLOR);
+
+    Mat image;
+    image = imread("../images/image.tif", CV_LOAD_IMAGE_COLOR);
 	if(! image.data )
     {
 	    cout <<  "Could not open or find the image" << std::endl ;
