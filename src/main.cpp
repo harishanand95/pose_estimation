@@ -70,13 +70,11 @@ int main(){
 
     Mat image;
     image = imread("../images/image.tif", CV_LOAD_IMAGE_COLOR);
-	if(! image.data )
+    if(! image.data )
     {
-	    cout <<  "Could not open or find the image" << std::endl ;
+	cout <<  "Could not open or find the image" << std::endl ;
        	return -1;
     }
-    //	imshow("Display window", image);
-    //	waitKey(0);
 
 
     // Intrinsic matrix (K) definition
@@ -84,12 +82,12 @@ int main(){
     double centerX = 354;
     double centerY = 245;
     Matrix3d K;
-	K << focalLength, 0, centerX,
-	     0, focalLength, centerY,
-	     0, 0, 1;
+    K << focalLength, 0, centerX,
+	 0, focalLength, centerY,
+	 0, 0, 1;
 
 
-	// The 2D image pixel location of the 6 corners
+    // The 2D image pixel location of the 6 corners
     Matrix<double, 6, 2> actual2DPoints;
     actual2DPoints << 183, 147,
                       350, 133,
